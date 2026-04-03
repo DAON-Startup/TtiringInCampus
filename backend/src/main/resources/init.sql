@@ -1,0 +1,27 @@
+-- 띠링인캠퍼스 초기 DB 스키마
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    university VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notices (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    university VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    title VARCHAR(500) NOT NULL,
+    url VARCHAR(1000),
+    published_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    university VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

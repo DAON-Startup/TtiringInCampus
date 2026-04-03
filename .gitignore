@@ -1,0 +1,23 @@
+# 환경 변수
+.env
+
+# Java / Gradle
+backend/build/
+backend/.gradle/
+backend/*.class
+backend/out/
+
+# React Native
+frontend/node_modules/
+frontend/.expo/
+frontend/android/
+frontend/ios/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
