@@ -1,18 +1,58 @@
 spring:
+  application:
+    name: univ-notice-api
+
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:3306/${DB_NAME:ttingincamp}
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/univ_notice}
+    username: ${SPRING_DATASOURCE_USERNAME:univnotice}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
     show-sql: false
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
 server:
   port: 8080
 
-app:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration: 86400000
+# JWT
+jwt:
+  secret: ${JWT_SECRET:default-secret-key-for-development-only-change-in-production}
+  expiration: ${JWT_EXPIRATION:86400}
+  refresh-expiration: 604800
+
+# Internal API
+internal:
+  api-key: ${INTERNAL_API_KEY:dev-internal-key}
+
+# LLM
+llm:
+  api-key: ${LLM_API_KEY:}
+  model: claude-haiku-4-5-20251001
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Logging
+logging:
+  level:
+    com.univnotice: DEBUG
+    org.hibernate.SQL: DEBUG

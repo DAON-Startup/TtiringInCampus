@@ -1,0 +1,112 @@
+{
+"name": "운영 - API 헬스체크",
+"nodes": [
+{
+"parameters": {
+"rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] }
+},
+"name": "5분 간격 트리거",
+"type": "n8n-nodes-base.scheduleTrigger",
+"typeVersion": 1.2,
+"position": [240, 300]
+},
+{
+"parameters": {
+"url": "http://api:8080/actuator/health",
+"options": { "timeout": 10000 }
+},
+"name": "API 헬스체크",
+"type": "n8n-nodes-base.httpRequest",
+"typeVersion": 4.2,
+"position": [460, 300],
+"retryOnFail": false,
+"continueOnFail": true
+},
+{
+"parameters": {
+"conditions": {
+"string": [{ "value1": "={{ $json.status }}", "operation": "equals", "value2": "UP" }]
+}
+},
+"name": "정상 여부 확인",
+"type": "n8n-nodes-base.if",
+"typeVersion": 2,
+"position": [680, 300]
+},
+{
+"parameters": {
+"jsCode": "// 정상 - 로그만 기록\nconst now = new Date().toISOString();\nconsole.log(`[${now}] API Health: UP`);\nreturn [{ json: { status: 'UP', checked_at: now } }];"
+},
+"name": "정상 로그",
+"type": "n8n-nodes-base.code",
+"typeVersion": 2,
+"position": [900, 200]
+},
+{
+"parameters": {
+"jsCode": "// 장애 감지 - 자동 복구 시도\nconst now = new Date().toISOString();\nconst error = $input.first().json;\nconsole.error(`[${now}] API Health: DOWN`, JSON.stringify(error));\nreturn [{ json: { status: 'DOWN', checked_at: now, error: JSON.stringify(error) } }];"
+},
+"name": "장애 감지",
+"type": "n8n-nodes-base.code",
+"typeVersion": 2,
+"position": [900, 400]
+},
+{
+"parameters": {
+"command": "docker restart univ-notice-api"
+},
+"name": "API 컨테이너 재시작",
+"type": "n8n-nodes-base.executeCommand",
+"typeVersion": 1,
+"position": [1120, 400],
+"continueOnFail": true
+},
+{
+"parameters": {
+"value": 30000
+},
+"name": "30초 대기",
+"type": "n8n-nodes-base.wait",
+"typeVersion": 1.1,
+"position": [1340, 400]
+},
+{
+"parameters": {
+"url": "http://api:8080/actuator/health",
+"options": { "timeout": 10000 }
+},
+"name": "재시작 후 헬스체크",
+"type": "n8n-nodes-base.httpRequest",
+"typeVersion": 4.2,
+"position": [1560, 400],
+"continueOnFail": true
+},
+{
+"parameters": {
+"conditions": {
+"string": [{ "value1": "={{ $json.status }}", "operation": "equals", "value2": "UP" }]
+}
+},
+"name": "복구 성공 확인",
+"type": "n8n-nodes-base.if",
+"typeVersion": 2,
+"position": [1780, 400]
+}
+],
+"connections": {
+"5분 간격 트리거": { "main": [[{ "node": "API 헬스체크", "type": "main", "index": 0 }]] },
+"API 헬스체크": { "main": [[{ "node": "정상 여부 확인", "type": "main", "index": 0 }]] },
+"정상 여부 확인": {
+"main": [
+[{ "node": "정상 로그", "type": "main", "index": 0 }],
+[{ "node": "장애 감지", "type": "main", "index": 0 }]
+]
+},
+"장애 감지": { "main": [[{ "node": "API 컨테이너 재시작", "type": "main", "index": 0 }]] },
+"API 컨테이너 재시작": { "main": [[{ "node": "30초 대기", "type": "main", "index": 0 }]] },
+"30초 대기": { "main": [[{ "node": "재시작 후 헬스체크", "type": "main", "index": 0 }]] },
+"재시작 후 헬스체크": { "main": [[{ "node": "복구 성공 확인", "type": "main", "index": 0 }]] }
+},
+"settings": { "timezone": "Asia/Seoul", "saveExecutionProgress": true },
+"tags": [{ "name": "ops" }, { "name": "monitoring" }]
+}
