@@ -28,7 +28,7 @@ services:
     networks:
       - univ-notice-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,7 +46,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backend/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/src/main/resources/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - univ-notice-net
     healthcheck:
@@ -85,6 +85,8 @@ services:
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       GENERIC_TIMEZONE: Asia/Seoul
       TZ: Asia/Seoul
     volumes:

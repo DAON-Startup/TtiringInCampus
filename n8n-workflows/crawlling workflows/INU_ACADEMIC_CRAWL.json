@@ -1,76 +1,149 @@
 {
-  "name": "INU 크롤링 - 학사 공지",
+  "name": "INU 크롤링 - 학사 공지 (성공 구조 적용)",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
       "name": "매시간 트리거",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [0, 300]
     },
     {
       "parameters": {
         "url": "https://www.inu.ac.kr/inu/1516/subview.do",
-        "options": { "timeout": 15000 },
-        "headerParameters": { "parameters": [{ "name": "User-Agent", "value": "UnivNoticeBot/1.0" }] }
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "response": { "response": { "fullResponse": true } }
+        }
       },
       "name": "학사 공지 GET",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 30000
+      "position": [220, 300]
     },
     {
       "parameters": {
-        "model": "claude-haiku-4-5-20251001",
-        "prompt": "아래 HTML에서 학사 공지사항 목록을 추출하여 JSON 배열로 반환하라.\n\n출력 형식 (JSON 배열만 반환):\n[{\"source_id\":2, \"external_id\":\"번호\", \"title\":\"제목\", \"url\":\"전체URL\", \"category\":\"ACADEMIC\", \"posted_date\":\"YYYY-MM-DD\"}]\n\n고정 공지 제외. 상대경로는 https://www.inu.ac.kr 붙이기.\n\nHTML:\n{{ $json.body }}",
-        "options": { "maxTokens": 2000, "temperature": 0 }
+        "jsCode": "const html = $node[\"학사 공지 GET\"].json.body || \"\";\nlet cleaned = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, \"\")\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, \"\")\n  .trim();\nconst finalBody = cleaned.length > 100 ? cleaned : html;\nreturn [{ json: { cleaned_body: finalBody } }];"
       },
-      "name": "LLM 파싱",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1,
-      "position": [680, 300]
+      "name": "LLM용 데이터 정제",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
     },
     {
       "parameters": {
-        "jsCode": "const llmOutput = $input.first().json.text || $input.first().json.output || '';\ntry {\n  const jsonMatch = llmOutput.match(/\\[[\\s\\S]*\\]/);\n  if (!jsonMatch) throw new Error('No JSON array found');\n  const notices = JSON.parse(jsonMatch[0]);\n  return [{ json: { notices, count: notices.length, status: 'SUCCESS' } }];\n} catch (e) {\n  return [{ json: { notices: [], count: 0, status: 'PARSE_FAILED', error: e.message } }];\n}"
+        "promptType": "define",
+        "text": "당신은 대학교 웹사이트 분석 전문가입니다. 아래 HTML 데이터에서 [학사 공지사항] 목록을 찾아 JSON 배열로 반환하세요.\n\n[출력 형식]\nJSON 배열 형태만 출력 (다른 설명 절대 금지)\n\n[필수 포함 항목]\n- source_id: 2\n- external_id: 게시글 고유 번호\n- title: 공지 제목\n- url: 상세 페이지 전체 URL (https://www.inu.ac.kr 붙일 것)\n- category: ACADEMIC\n- posted_date: YYYY-MM-DD 형식 (없으면 2026-04-04)\n\n[데이터]\n{{ $json.cleaned_body }}",
+        "hasOutputParser": true
+      },
+      "name": "LLM 파싱 (Chain)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [660, 500],
+      "credentials": {
+        "openAiApi": { "id": "OPENAI_CREDENTIAL_ID", "name": "OpenAI API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmOutput = $input.first().json.text || '';\ntry {\n  const jsonMatch = llmOutput.match(/\\[[\\s\\S]*\\]/);\n  if (!jsonMatch) throw new Error('No JSON array found');\n  const notices = JSON.parse(jsonMatch[0]);\n  return [{ json: { notices, count: notices.length, status: 'SUCCESS' } }];\n} catch (e) {\n  return [{ json: { notices: [], count: 0, status: 'PARSE_FAILED', error: e.message, raw: llmOutput } }];\n}"
       },
       "name": "JSON 추출",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [880, 300]
     },
     {
-      "parameters": { "conditions": { "number": [{ "value1": "={{ $json.count }}", "operation": "larger", "value2": 0 }] } },
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.count }}", "operation": "larger", "value2": 0 }]
+        }
+      },
       "name": "공지 확인",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [1100, 300]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://api:8080/internal/v1/notices/batch",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
         "sendBody": true,
-        "bodyParameters": { "parameters": [{ "name": "body", "value": "={{ JSON.stringify($json.notices) }}" }] }
+        "bodyParameters": {
+          "parameters": [
+            { "name": "body", "value": "={{ JSON.stringify($json.notices) }}" }
+          ]
+        }
       },
       "name": "Spring Boot 저장",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 200]
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8080/internal/v1/crawl-logs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sourceId\": 2,\n  \"status\": \"{{ $node['JSON 추출'].json.status }}\",\n  \"noticesFound\": {{ $node['JSON 추출'].json.count }},\n  \"newNotices\": {{ $node['Spring Boot 저장'].json?.data?.new_notices || 0 }},\n  \"errorMessage\": \"{{ $node['JSON 추출'].json.error || null }}\"\n}"
+      },
+      "name": "크롤링 로그 저장",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
     }
   ],
   "connections": {
     "매시간 트리거": { "main": [[{ "node": "학사 공지 GET", "type": "main", "index": 0 }]] },
-    "학사 공지 GET": { "main": [[{ "node": "LLM 파싱", "type": "main", "index": 0 }]] },
-    "LLM 파싱": { "main": [[{ "node": "JSON 추출", "type": "main", "index": 0 }]] },
+    "학사 공지 GET": { "main": [[{ "node": "LLM용 데이터 정제", "type": "main", "index": 0 }]] },
+    "LLM용 데이터 정제": { "main": [[{ "node": "LLM 파싱 (Chain)", "type": "main", "index": 0 }]] },
+    "OpenAI Chat Model": { "ai_language_model": [[{ "node": "LLM 파싱 (Chain)", "type": "ai_language_model", "index": 0 }]] },
+    "LLM 파싱 (Chain)": { "main": [[{ "node": "JSON 추출", "type": "main", "index": 0 }]] },
     "JSON 추출": { "main": [[{ "node": "공지 확인", "type": "main", "index": 0 }]] },
-    "공지 확인": { "main": [[{ "node": "Spring Boot 저장", "type": "main", "index": 0 }], []] }
+    "공지 확인": {
+      "main": [
+        [{ "node": "Spring Boot 저장", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Spring Boot 저장": { "main": [[{ "node": "크롤링 로그 저장", "type": "main", "index": 0 }]] }
   },
-  "settings": { "timezone": "Asia/Seoul" },
-  "tags": [{ "name": "crawling" }, { "name": "inu" }, { "name": "academic" }]
+  "settings": { "timezone": "Asia/Seoul", "saveExecutionProgress": true }
 }

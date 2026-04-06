@@ -1,165 +1,149 @@
 {
-"name": "INU 크롤링 - 전체 공지",
-"nodes": [
-{
-"parameters": {
-"rule": {
-"interval": [{ "field": "hours", "hoursInterval": 1 }]
-}
-},
-"name": "매시간 트리거",
-"type": "n8n-nodes-base.scheduleTrigger",
-"typeVersion": 1.2,
-"position": [240, 300]
-},
-{
-"parameters": {
-"url": "https://www.inu.ac.kr/inu/1534/subview.do",
-"options": {
-"timeout": 15000,
-"response": { "response": { "fullResponse": true } }
-},
-"headerParameters": {
-"parameters": [
-{
-"name": "User-Agent",
-"value": "UnivNoticeBot/1.0 (+https://univnotice.kr/bot-info)"
-}
-]
-}
-},
-"name": "공지 페이지 GET",
-"type": "n8n-nodes-base.httpRequest",
-"typeVersion": 4.2,
-"position": [460, 300],
-"retryOnFail": true,
-"maxTries": 3,
-"waitBetweenTries": 30000
-},
-{
-"parameters": {
-"value": 2000
-},
-"name": "Rate Limit (2초)",
-"type": "n8n-nodes-base.wait",
-"typeVersion": 1.1,
-"position": [460, 500]
-},
-{
-"parameters": {
-"model": "claude-haiku-4-5-20251001",
-"prompt": "아래 HTML에서 공지사항 목록을 추출하여 JSON 배열로 반환하라.\n\n출력 형식 (JSON 배열만 반환, 다른 텍스트 없이):\n[\n  {\n    \"source_id\": 1,\n    \"external_id\": \"게시글 번호 (숫자)\",\n    \"title\": \"공지 제목\",\n    \"url\": \"공지 상세 페이지 전체 URL (https://www.inu.ac.kr로 시작)\",\n    \"category\": \"GENERAL\",\n    \"posted_date\": \"YYYY-MM-DD\"\n  }\n]\n\n주의:\n- 고정 공지(상단 고정)는 제외하라\n- URL이 상대 경로이면 https://www.inu.ac.kr를 앞에 붙여라\n- 날짜 형식은 반드시 YYYY-MM-DD로 통일하라\n\nHTML:\n{{ $json.body }}",
-"options": {
-"maxTokens": 2000,
-"temperature": 0
-}
-},
-"name": "LLM 파싱",
-"type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-"typeVersion": 1,
-"position": [680, 300],
-"credentials": {
-"anthropicApi": { "id": "ANTHROPIC_CREDENTIAL_ID", "name": "Anthropic API" }
-}
-},
-{
-"parameters": {
-"jsCode": "const llmOutput = $input.first().json.text || $input.first().json.output || '';\ntry {\n  const jsonMatch = llmOutput.match(/\\[[\\s\\S]*\\]/);\n  if (!jsonMatch) throw new Error('No JSON array found in LLM output');\n  const notices = JSON.parse(jsonMatch[0]);\n  return [{ json: { notices, count: notices.length, status: 'SUCCESS' } }];\n} catch (e) {\n  return [{ json: { notices: [], count: 0, status: 'PARSE_FAILED', error: e.message } }];\n}"
-},
-"name": "JSON 추출",
-"type": "n8n-nodes-base.code",
-"typeVersion": 2,
-"position": [900, 300]
-},
-{
-"parameters": {
-"conditions": {
-"number": [{ "value1": "={{ $json.count }}", "operation": "larger", "value2": 0 }]
-}
-},
-"name": "공지 있는지 확인",
-"type": "n8n-nodes-base.if",
-"typeVersion": 2,
-"position": [1120, 300]
-},
-{
-"parameters": {
-"method": "POST",
-"url": "http://api:8080/internal/v1/notices/batch",
-"sendHeaders": true,
-"headerParameters": {
-"parameters": [
-{ "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
-{ "name": "Content-Type", "value": "application/json" }
-]
-},
-"sendBody": true,
-"bodyParameters": {
-"parameters": [
-{ "name": "body", "value": "={{ JSON.stringify($json.notices) }}" }
-]
-},
-"options": { "timeout": 10000 }
-},
-"name": "Spring Boot 저장",
-"type": "n8n-nodes-base.httpRequest",
-"typeVersion": 4.2,
-"position": [1340, 200]
-},
-{
-"parameters": {
-"method": "POST",
-"url": "http://api:8080/internal/v1/crawl-logs",
-"sendHeaders": true,
-"headerParameters": {
-"parameters": [
-{ "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
-{ "name": "Content-Type", "value": "application/json" }
-]
-},
-"sendBody": true,
-"specifyBody": "json",
-"jsonBody": "={\n  \"sourceId\": 1,\n  \"status\": \"{{ $node['JSON 추출'].json.status }}\",\n  \"noticesFound\": {{ $node['JSON 추출'].json.count }},\n  \"newNotices\": {{ $node['Spring Boot 저장'].json?.data?.new_notices || 0 }},\n  \"errorMessage\": null,\n  \"responseTimeMs\": null\n}"
-},
-"name": "크롤링 로그 저장",
-"type": "n8n-nodes-base.httpRequest",
-"typeVersion": 4.2,
-"position": [1560, 300]
-},
-{
-"parameters": {
-"method": "POST",
-"url": "http://api:8080/internal/v1/crawl-logs",
-"sendHeaders": true,
-"headerParameters": {
-"parameters": [
-{ "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
-{ "name": "Content-Type", "value": "application/json" }
-]
-},
-"sendBody": true,
-"specifyBody": "json",
-"jsonBody": "{\n  \"sourceId\": 1,\n  \"status\": \"FAILED\",\n  \"noticesFound\": 0,\n  \"newNotices\": 0,\n  \"errorMessage\": \"No notices parsed from HTML\",\n  \"responseTimeMs\": null\n}"
-},
-"name": "실패 로그 저장",
-"type": "n8n-nodes-base.httpRequest",
-"typeVersion": 4.2,
-"position": [1340, 450]
-}
-],
-"connections": {
-"매시간 트리거": { "main": [[{ "node": "공지 페이지 GET", "type": "main", "index": 0 }]] },
-"공지 페이지 GET": { "main": [[{ "node": "LLM 파싱", "type": "main", "index": 0 }]] },
-"LLM 파싱": { "main": [[{ "node": "JSON 추출", "type": "main", "index": 0 }]] },
-"JSON 추출": { "main": [[{ "node": "공지 있는지 확인", "type": "main", "index": 0 }]] },
-"공지 있는지 확인": {
-"main": [
-[{ "node": "Spring Boot 저장", "type": "main", "index": 0 }],
-[{ "node": "실패 로그 저장", "type": "main", "index": 0 }]
-]
-},
-"Spring Boot 저장": { "main": [[{ "node": "크롤링 로그 저장", "type": "main", "index": 0 }]] }
-},
-"settings": { "timezone": "Asia/Seoul", "saveExecutionProgress": true },
-"tags": [{ "name": "crawling" }, { "name": "inu" }]
+  "name": "INU 크롤링 - 전체 공지 (안전한 데이터 전달)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "name": "매시간 트리거",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.inu.ac.kr/inu/1534/subview.do",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "name": "공지 페이지 GET",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 이전 노드에서 HTML 본문 가져오기\nconst html = $node[\"공지 페이지 GET\"].json.body || \"\";\n\n// 2. 스크립트와 스타일 태그만 제거 (내용 누락 방지)\nlet cleaned = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, \"\")\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, \"\")\n  .trim();\n\n// 3. 만약 정제된 결과가 너무 짧으면 원본을 그대로 사용\nconst finalBody = cleaned.length > 100 ? cleaned : html;\n\nreturn [{ json: { cleaned_body: finalBody } }];"
+      },
+      "name": "LLM용 데이터 정제",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "당신은 대학교 웹사이트 분석 전문가입니다. 아래 HTML 데이터에서 공지사항 목록을 찾아 JSON 배열로 반환하세요.\n\n[출력 형식]\nJSON 배열 형태만 출력 (다른 설명 절대 금지)\n\n[필수 포함 항목]\n- source_id: 1\n- external_id: 게시글 고유 번호\n- title: 공지 제목\n- url: 상세 페이지 전체 URL (https://www.inu.ac.kr 붙일 것)\n- category: GENERAL\n- posted_date: YYYY-MM-DD 형식 (없으면 2026-04-04)\n\n[데이터]\n{{ $json.cleaned_body }}",
+        "hasOutputParser": true
+      },
+      "name": "LLM 파싱 (Chain)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [660, 500],
+      "credentials": {
+        "openAiApi": { "id": "OPENAI_CREDENTIAL_ID", "name": "OpenAI API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmOutput = $input.first().json.text || '';\ntry {\n  const jsonMatch = llmOutput.match(/\\[[\\s\\S]*\\]/);\n  if (!jsonMatch) throw new Error('No JSON array found');\n  const notices = JSON.parse(jsonMatch[0]);\n  return [{ json: { notices, count: notices.length, status: 'SUCCESS' } }];\n} catch (e) {\n  return [{ json: { notices: [], count: 0, status: 'PARSE_FAILED', error: e.message, raw: llmOutput } }];\n}"
+      },
+      "name": "JSON 추출",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.count }}", "operation": "larger", "value2": 0 }]
+        }
+      },
+      "name": "공지 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8080/internal/v1/notices/batch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "body", "value": "={{ JSON.stringify($json.notices) }}" }
+          ]
+        }
+      },
+      "name": "Spring Boot 저장",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8080/internal/v1/crawl-logs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sourceId\": 1,\n  \"status\": \"{{ $node['JSON 추출'].json.status }}\",\n  \"noticesFound\": {{ $node['JSON 추출'].json.count }},\n  \"newNotices\": {{ $node['Spring Boot 저장'].json?.data?.new_notices || 0 }},\n  \"errorMessage\": \"{{ $node['JSON 추출'].json.error || null }}\"\n}"
+      },
+      "name": "크롤링 로그 저장",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "매시간 트리거": { "main": [[{ "node": "공지 페이지 GET", "type": "main", "index": 0 }]] },
+    "공지 페이지 GET": { "main": [[{ "node": "LLM용 데이터 정제", "type": "main", "index": 0 }]] },
+    "LLM용 데이터 정제": { "main": [[{ "node": "LLM 파싱 (Chain)", "type": "main", "index": 0 }]] },
+    "OpenAI Chat Model": { "ai_language_model": [[{ "node": "LLM 파싱 (Chain)", "type": "ai_language_model", "index": 0 }]] },
+    "LLM 파싱 (Chain)": { "main": [[{ "node": "JSON 추출", "type": "main", "index": 0 }]] },
+    "JSON 추출": { "main": [[{ "node": "공지 확인", "type": "main", "index": 0 }]] },
+    "공지 확인": {
+      "main": [
+        [{ "node": "Spring Boot 저장", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Spring Boot 저장": { "main": [[{ "node": "크롤링 로그 저장", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Asia/Seoul", "saveExecutionProgress": true }
 }

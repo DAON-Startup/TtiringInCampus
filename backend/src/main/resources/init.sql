@@ -3,21 +3,13 @@
 -- ERD v1.2 기반
 -- ═══════════════════════════════════════════════════════
 
--- ENUM 타입 정의
-CREATE TYPE notice_category AS ENUM (
-    'ACADEMIC', 'SCHOLARSHIP', 'DEPARTMENT', 'CAREER', 'GENERAL', 'DORMITORY', 'EXTRACURRICULAR'
-);
-
-CREATE TYPE crawl_status AS ENUM (
-    'SUCCESS', 'PARTIAL', 'FAILED'
-);
-
 -- ─── universities ───
 CREATE TABLE universities (
     university_id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     domain VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- ─── departments ───
@@ -26,7 +18,8 @@ CREATE TABLE departments (
     university_id BIGINT NOT NULL REFERENCES universities(university_id),
     name VARCHAR(100) NOT NULL,
     college VARCHAR(100),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_departments_university ON departments(university_id);
 
@@ -50,7 +43,7 @@ CREATE TABLE notice_sources (
     source_id BIGSERIAL PRIMARY KEY,
     university_id BIGINT NOT NULL REFERENCES universities(university_id),
     name VARCHAR(100) NOT NULL,
-    category notice_category NOT NULL,
+    category VARCHAR(50) NOT NULL,
     base_url VARCHAR(500) NOT NULL,
     list_url_template VARCHAR(500),
     llm_parse_prompt TEXT,
@@ -68,10 +61,11 @@ CREATE TABLE notices (
     external_id VARCHAR(100),
     title VARCHAR(500) NOT NULL,
     url VARCHAR(1000) NOT NULL,
-    category notice_category NOT NULL,
+    category VARCHAR(50) NOT NULL,
     posted_date DATE,
     url_hash VARCHAR(64) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_notices_source_id ON notices(source_id);
 CREATE INDEX idx_notices_category ON notices(category);
@@ -85,7 +79,8 @@ CREATE TABLE user_keywords (
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     keyword VARCHAR(100) NOT NULL,
     alert_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_user_keywords_user ON user_keywords(user_id);
 
@@ -96,7 +91,8 @@ CREATE TABLE keyword_alerts (
     notice_id BIGINT NOT NULL REFERENCES notices(notice_id) ON DELETE CASCADE,
     is_sent BOOLEAN NOT NULL DEFAULT FALSE,
     sent_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_keyword_alerts_keyword ON keyword_alerts(keyword_id);
 CREATE INDEX idx_keyword_alerts_unsent ON keyword_alerts(is_sent) WHERE is_sent = FALSE;
@@ -107,6 +103,7 @@ CREATE TABLE bookmarks (
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     notice_id BIGINT NOT NULL REFERENCES notices(notice_id) ON DELETE CASCADE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, notice_id)
 );
 CREATE INDEX idx_bookmarks_user ON bookmarks(user_id);
@@ -117,6 +114,7 @@ CREATE TABLE user_subscriptions (
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     source_id BIGINT NOT NULL REFERENCES notice_sources(source_id) ON DELETE CASCADE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, source_id)
 );
 
@@ -128,6 +126,7 @@ CREATE TABLE ai_reports (
     summary_content TEXT NOT NULL,
     is_sent BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, report_date)
 );
 CREATE INDEX idx_ai_reports_user_date ON ai_reports(user_id, report_date DESC);
@@ -136,12 +135,13 @@ CREATE INDEX idx_ai_reports_user_date ON ai_reports(user_id, report_date DESC);
 CREATE TABLE crawl_logs (
     log_id BIGSERIAL PRIMARY KEY,
     source_id BIGINT NOT NULL REFERENCES notice_sources(source_id),
-    status crawl_status NOT NULL,
+    status VARCHAR(50) NOT NULL,
     notices_found INTEGER DEFAULT 0,
     new_notices INTEGER DEFAULT 0,
     error_message TEXT,
     response_time_ms INTEGER,
-    executed_at TIMESTAMP NOT NULL DEFAULT NOW()
+    executed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_crawl_logs_source ON crawl_logs(source_id, executed_at DESC);
 
