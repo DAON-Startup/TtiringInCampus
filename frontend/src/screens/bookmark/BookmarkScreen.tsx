@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, StyleSheet, Text, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, Text, ActivityIndicator, SafeAreaView } from 'react-native';
 import { bookmarkApi } from '../../api';
 import { Bookmark } from '../../types';
 import NoticeCard from '../../components/common/NoticeCard';
-import { colors, spacing, typography } from '../../styles/tokens';
+import Header from '../../components/layout/Header';
+import { colors, spacing, fonts } from '../../styles/tokens';
 
 const BookmarkScreen = ({ navigation }: any) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -22,20 +23,20 @@ const BookmarkScreen = ({ navigation }: any) => {
   };
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchBookmarks();
-    });
+    const unsubscribe = navigation.addListener('focus', fetchBookmarks);
     return unsubscribe;
   }, [navigation]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <Header title="북마크" />
       {loading ? (
-        <ActivityIndicator style={styles.loader} />
+        <ActivityIndicator style={styles.loader} color={colors.primary} />
       ) : (
         <FlatList
           data={bookmarks}
           keyExtractor={(item) => item.bookmarkId.toString()}
+          contentContainerStyle={bookmarks.length === 0 ? styles.emptyContainer : styles.listContent}
           renderItem={({ item }) => (
             <NoticeCard
               notice={item.notice}
@@ -43,27 +44,42 @@ const BookmarkScreen = ({ navigation }: any) => {
             />
           )}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>보관된 공지사항이 없습니다.</Text>
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyIcon}>🔖</Text>
+              <Text style={styles.emptyTitle}>저장한 공지가 없습니다</Text>
+              <Text style={styles.emptyDesc}>공지사항 상세에서 저장 버튼을 눌러 보관하세요.</Text>
+            </View>
           }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
+  safeArea: { flex: 1, backgroundColor: colors.gray[100] },
+  loader: { padding: 40 },
+  emptyContainer: { flex: 1 },
+  listContent: { paddingVertical: spacing.sm },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+    paddingHorizontal: spacing.xl,
   },
-  loader: {
-    padding: spacing.xl,
+  emptyIcon: { fontSize: 52, marginBottom: spacing.md },
+  emptyTitle: {
+    fontSize: 17,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: spacing.xxl,
+  emptyDesc: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.gray[500],
-    ...typography.body2,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });
 

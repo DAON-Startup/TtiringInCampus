@@ -1,19 +1,31 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Notice } from '../../types';
-import { colors, spacing, typography } from '../../styles/tokens';
+import { colors, spacing, fonts } from '../../styles/tokens';
 
 interface NoticeCardProps {
   notice: Notice;
   onPress: (notice: Notice) => void;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  ACADEMIC: '학사',
+  SCHOLARSHIP: '장학',
+  DEPARTMENT: '학과',
+  CAREER: '취업',
+  GENERAL: '일반',
+  DORMITORY: '생활관',
+  EXTRACURRICULAR: '비교과',
+};
+
 const NoticeCard: React.FC<NoticeCardProps> = ({ notice, onPress }) => {
   return (
-    <TouchableOpacity style={styles.container} onPress={() => onPress(notice)}>
-      <View style={styles.header}>
-        <View style={styles.categoryContainer}>
-          <Text style={styles.categoryText}>{notice.category}</Text>
+    <TouchableOpacity style={styles.container} onPress={() => onPress(notice)} activeOpacity={0.7}>
+      <View style={styles.row}>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {CATEGORY_LABELS[notice.category] ?? notice.category}
+          </Text>
         </View>
         <Text style={styles.dateText}>{notice.postedDate}</Text>
       </View>
@@ -27,37 +39,56 @@ const NoticeCard: React.FC<NoticeCardProps> = ({ notice, onPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.md,
+    minHeight: 80,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
     backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.xs,
+    borderRadius: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: { elevation: 3 },
+      default: {} as any,
+    }),
   },
-  header: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  categoryContainer: {
-    backgroundColor: colors.gray[100],
+  badge: {
+    backgroundColor: colors.categoryBadge,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  categoryText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
+  badgeText: {
+    fontSize: 11,
+    fontFamily: fonts.semiBold,
+    color: colors.white,
   },
   dateText: {
-    ...typography.caption,
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.gray[500],
   },
   title: {
-    ...typography.body1,
+    fontSize: 15,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
     marginBottom: spacing.xs,
+    lineHeight: 22,
   },
   sourceText: {
-    ...typography.caption,
+    fontSize: 12,
+    fontFamily: fonts.regular,
     color: colors.gray[500],
   },
 });

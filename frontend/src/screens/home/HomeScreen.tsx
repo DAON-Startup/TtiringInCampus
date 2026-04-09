@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import {
+  View, FlatList, StyleSheet, ActivityIndicator,
+  Text, TouchableOpacity, SafeAreaView, ScrollView,
+} from 'react-native';
 import { noticeApi } from '../../api';
 import { Notice, NoticeCategory } from '../../types';
 import NoticeCard from '../../components/common/NoticeCard';
-import { colors, spacing, typography } from '../../styles/tokens';
+import Header from '../../components/layout/Header';
+import { colors, spacing, fonts } from '../../styles/tokens';
 
 const CATEGORIES: { label: string; value?: NoticeCategory }[] = [
   { label: '전체' },
@@ -22,22 +26,22 @@ const HomeScreen = ({ navigation }: any) => {
   const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchNotices = useCallback(async (category?: NoticeCategory, pageNum: number = 0, isInitial: boolean = false) => {
-    setLoading(true);
-    try {
-      const response = await noticeApi.getNotices(category, pageNum);
-      if (isInitial) {
-        setNotices(response.data.data.notices);
-      } else {
-        setNotices((prev) => [...prev, ...response.data.data.notices]);
+  const fetchNotices = useCallback(
+    async (category?: NoticeCategory, pageNum = 0, isInitial = false) => {
+      setLoading(true);
+      try {
+        const response = await noticeApi.getNotices(category, pageNum);
+        const incoming = response.data.data.notices;
+        setNotices((prev) => (isInitial ? incoming : [...prev, ...incoming]));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     fetchNotices(selectedCategory, 0, true);
@@ -51,46 +55,37 @@ const HomeScreen = ({ navigation }: any) => {
 
   const onEndReached = () => {
     if (!loading) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchNotices(selectedCategory, nextPage);
+      const next = page + 1;
+      setPage(next);
+      fetchNotices(selectedCategory, next);
     }
   };
 
-  const handleCategoryPress = (category?: NoticeCategory) => {
-    setSelectedCategory(category);
-    setPage(0);
-  };
-
   return (
-    <View style={styles.container}>
-      <View style={styles.categoryList}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={CATEGORIES}
-          keyExtractor={(item) => item.label}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.categoryItem,
-                selectedCategory === item.value && styles.categoryItemActive,
-              ]}
-              onPress={() => handleCategoryPress(item.value)}
-            >
-              <Text
-                style={[
-                  styles.categoryText,
-                  selectedCategory === item.value && styles.categoryTextActive,
-                ]}
+    <SafeAreaView style={styles.safeArea}>
+      <Header title="공지사항" showAlert />
+      {/* 카테고리 필터 — underline 스타일 */}
+      <View style={styles.categoryBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+          {CATEGORIES.map((item) => {
+            const active = selectedCategory === item.value;
+            return (
+              <TouchableOpacity
+                key={item.label}
+                style={styles.categoryItem}
+                onPress={() => { setSelectedCategory(item.value); setPage(0); }}
               >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
+                <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
+                  {item.label}
+                </Text>
+                {active && <View style={styles.categoryUnderline} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
       <FlatList
+        style={styles.list}
         data={notices}
         keyExtractor={(item) => item.noticeId.toString()}
         renderItem={({ item }) => (
@@ -103,39 +98,55 @@ const HomeScreen = ({ navigation }: any) => {
         refreshing={refreshing}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loading ? <ActivityIndicator style={styles.loader} /> : null}
+        contentContainerStyle={styles.listContent}
+        ListFooterComponent={loading ? <ActivityIndicator style={styles.loader} color={colors.primary} /> : null}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
-  categoryList: {
-    paddingVertical: spacing.sm,
+  categoryBar: {
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[200],
+    backgroundColor: colors.white,
+  },
+  categoryScroll: {
+    paddingHorizontal: spacing.sm,
   },
   categoryItem: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginHorizontal: spacing.xs,
-    borderRadius: 20,
-    backgroundColor: colors.gray[100],
-  },
-  categoryItemActive: {
-    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
   },
   categoryText: {
-    ...typography.body2,
-    color: colors.gray[700],
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.gray[500],
   },
   categoryTextActive: {
-    color: colors.white,
-    fontWeight: 'bold',
+    color: colors.primary,
+    fontFamily: fonts.bold,
+  },
+  categoryUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: spacing.sm,
+    right: spacing.sm,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+  },
+  list: {
+    flex: 1,
+    backgroundColor: colors.gray[100],
+  },
+  listContent: {
+    paddingVertical: spacing.sm,
   },
   loader: {
     padding: spacing.md,

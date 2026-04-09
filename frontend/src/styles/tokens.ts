@@ -1,8 +1,10 @@
 export const colors = {
-  primary: '#005bac', // Incheon University main color
+  primary: '#3366FF',
   secondary: '#ff7f00',
   white: '#ffffff',
   black: '#000000',
+  text: '#11181C',
+  background: '#ffffff',
   gray: {
     100: '#f8f9fa',
     200: '#e9ecef',
@@ -14,6 +16,8 @@ export const colors = {
     800: '#343a40',
     900: '#212529',
   },
+  categoryBadge: '#8e8e8e',
+  important: '#e03131',
   error: '#dc3545',
   success: '#28a745',
   warning: '#ffc107',
@@ -28,30 +32,38 @@ export const spacing = {
   xxl: 40,
 };
 
+export const fonts = {
+  regular: 'Pretendard-Regular',
+  medium: 'Pretendard-Medium',
+  semiBold: 'Pretendard-SemiBold',
+  bold: 'Pretendard-Bold',
+  extraBold: 'Pretendard-ExtraBold',
+};
+
 export const typography = {
   h1: {
-    fontSize: 24,
-    fontWeight: 'bold' as const,
+    fontSize: 32,
+    fontFamily: fonts.extraBold,
   },
   h2: {
     fontSize: 20,
-    fontWeight: 'bold' as const,
+    fontFamily: fonts.bold,
   },
   h3: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontFamily: fonts.semiBold,
   },
   body1: {
     fontSize: 16,
-    fontWeight: 'normal' as const,
+    fontFamily: fonts.regular,
   },
   body2: {
     fontSize: 14,
-    fontWeight: 'normal' as const,
+    fontFamily: fonts.regular,
   },
   caption: {
     fontSize: 12,
-    fontWeight: 'normal' as const,
+    fontFamily: fonts.regular,
     color: colors.gray[600],
   },
 };
