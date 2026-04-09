@@ -1,44 +1,107 @@
 version: '3.8'
 
 services:
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./backend/src/main/resources/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "3306:3306"
-
-  backend:
-    build: ./backend
-    environment:
-      DB_HOST: db
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+  # ─── Spring Boot API Server ───
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: univ-notice-api
     ports:
       - "8080:8080"
-    depends_on:
-      - db
-
-  n8n:
-    image: n8nio/n8n
     environment:
-      N8N_BASIC_AUTH_ACTIVE: "true"
-      N8N_BASIC_AUTH_USER: ${N8N_USER}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/univ_notice
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400}
+      LLM_API_KEY: ${LLM_API_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - univ-notice-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ─── PostgreSQL 16 ───
+  postgresql:
+    image: postgres:16-alpine
+    container_name: univ-notice-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: univ_notice
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/src/main/resources/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - univ-notice-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d univ_notice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis 7 ───
+  redis:
+    image: redis:7-alpine
+    container_name: univ-notice-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - univ-notice-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── n8n (크롤링 엔진 + 운영 자동화) ───
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: univ-notice-n8n
     ports:
       - "5678:5678"
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_SECURE_COOKIE: "false"
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      GENERIC_TIMEZONE: Asia/Seoul
+      TZ: Asia/Seoul
     volumes:
-      - n8n_data:/home/node/.n8n
-      - ./n8n-workflows:/workflows
+      - n8n-data:/home/node/.n8n
+    networks:
+      - univ-notice-net
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
-  db_data:
-  n8n_data:
+  postgres-data:
+  redis-data:
+  n8n-data:
+
+networks:
+  univ-notice-net:
+    driver: bridge

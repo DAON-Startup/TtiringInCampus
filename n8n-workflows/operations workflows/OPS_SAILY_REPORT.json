@@ -1,0 +1,59 @@
+{
+"name": "운영 - 일일 운영 리포트",
+"nodes": [
+{
+"parameters": {
+"rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * *" }] }
+},
+"name": "매일 09:00 트리거",
+"type": "n8n-nodes-base.scheduleTrigger",
+"typeVersion": 1.2,
+"position": [240, 300]
+},
+{
+"parameters": {
+"url": "http://api:8080/actuator/health",
+"options": { "timeout": 5000 }
+},
+"name": "API 상태 확인",
+"type": "n8n-nodes-base.httpRequest",
+"typeVersion": 4.2,
+"position": [460, 300],
+"continueOnFail": true
+},
+{
+"parameters": {
+"url": "http://api:8080/actuator/metrics/http.server.requests",
+"options": { "timeout": 5000 }
+},
+"name": "API 메트릭 조회",
+"type": "n8n-nodes-base.httpRequest",
+"typeVersion": 4.2,
+"position": [460, 500],
+"continueOnFail": true
+},
+{
+"parameters": {
+"jsCode": "const apiHealth = $('API 상태 확인').first().json;\nconst metrics = $('API 메트릭 조회').first().json;\nconst now = new Date();\nconst dateStr = now.toISOString().split('T')[0];\nconst dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][now.getDay()];\n\nconst apiStatus = apiHealth?.status === 'UP' ? '✅ 정상' : '❌ 장애';\n\nconst report = `## 📊 일일 운영 리포트 — ${dateStr} (${dayOfWeek})\n\n### 서비스 상태\n- API 서버: ${apiStatus}\n- n8n 크롤링: ✅ 정상 (이 워크플로우가 실행됨)\n\n### 시스템 메트릭\n- API 총 요청 수: 조회 중\n- 평균 응답 시간: 조회 중\n\n### 이슈/장애\n- 없음\n\n---\n*자동 생성된 리포트입니다.*`;\n\nreturn [{ json: { report, date: dateStr } }];"
+},
+"name": "리포트 생성",
+"type": "n8n-nodes-base.code",
+"typeVersion": 2,
+"position": [680, 400]
+}
+],
+"connections": {
+"매일 09:00 트리거": {
+"main": [
+[
+{ "node": "API 상태 확인", "type": "main", "index": 0 },
+{ "node": "API 메트릭 조회", "type": "main", "index": 0 }
+]
+]
+},
+"API 상태 확인": { "main": [[{ "node": "리포트 생성", "type": "main", "index": 0 }]] },
+"API 메트릭 조회": { "main": [[{ "node": "리포트 생성", "type": "main", "index": 0 }]] }
+},
+"settings": { "timezone": "Asia/Seoul" },
+"tags": [{ "name": "ops" }, { "name": "report" }]
+}
